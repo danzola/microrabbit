@@ -5,6 +5,7 @@ using MicroRabbit.Domain.Core.Commands;
 using MicroRabbit.Domain.Core.Events;
 using Newtonsoft.Json;
 using RabbitMQ.Client;
+using RabbitMQ.Client.Events;
 
 namespace MicroRabbit.Infra.Bus
 {
@@ -76,6 +77,55 @@ namespace MicroRabbit.Infra.Bus
             }
 
             _handlers[eventName].Add(handlerType);
+
+            await StartBasicConsume<T>();
+        }
+
+        private async Task StartBasicConsume<T>() where T : Event
+        {
+            var factory = new ConnectionFactory()
+            {
+                HostName = "localhost"
+            };
+
+            await using var connection = await factory.CreateConnectionAsync();
+            await using var channel = await connection.CreateChannelAsync();
+
+            try
+            {
+                var eventName = typeof (T).Name;
+                await channel.QueueDeclareAsync(queue: eventName,
+                                                durable: false,
+                                                exclusive: false,
+                                                autoDelete: false,
+                                                arguments: null);
+
+                var consumer = new AsyncEventingBasicConsumer(channel);
+                consumer.ReceivedAsync += Consumer_ReceivedAsync;
+
+                await channel.BasicConsumeAsync(queue: eventName, autoAck: true, consumer);
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error publishing message: {ex.Message}");
+                throw;
+            }
+        }
+
+        private async Task Consumer_ReceivedAsync(object sender, BasicDeliverEventArgs e)
+        {
+            var eventName = e.RoutingKey;
+            var body = @e.Body.ToArray();
+            var message = Encoding.UTF8.GetString(body);
+            try
+            {
+                await ProcessEvent(eventName,message);
+            }
+            catch(Exception ex)
+            {
+
+            }
         }
     }
 }
