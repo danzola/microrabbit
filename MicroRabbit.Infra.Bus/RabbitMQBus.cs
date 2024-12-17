@@ -120,11 +120,28 @@ namespace MicroRabbit.Infra.Bus
             var message = Encoding.UTF8.GetString(body);
             try
             {
-                await ProcessEvent(eventName,message);
+                await ProcessEvent(eventName,message).ConfigureAwait(false);
             }
             catch(Exception ex)
             {
+                Console.WriteLine($"Error consuming message: {ex.Message}");
+                throw;
+            }
+        }
 
+        private async Task ProcessEvent(string eventName, string message)
+        {
+            if(_handlers.TryGetValue(eventName, out List<Type>? subscriptions))
+            {
+                foreach (var subscription in subscriptions)
+                {
+                    var handler = Activator.CreateInstance(subscription);
+                    if(handler == null) continue;
+                    var eventType = _eventTypes.SingleOrDefault(t => t.Name == eventName);
+                    var @event = JsonConvert.DeserializeObject(message, eventType);
+                    var concreteType = typeof(IEventHandler<>).MakeGenericType(eventType);
+                    await (Task)concreteType.GetMethod("Handle")?.Invoke(handler, [@event]);
+                }
             }
         }
     }
