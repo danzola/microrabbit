@@ -1,20 +1,19 @@
+using MicroRabbit.Transfer.Application.Interfaces;
+using MicroRabbit.Transfer.Domain.Models;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MicroRabbit.Transfer.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class WeatherForecastController : ControllerBase
+    public class WeatherForecastController(ITransferService transferService) : ControllerBase
     {
-        private static readonly string[] Summaries = new[]
-        {
-            "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-        };        
+        private readonly ITransferService _transferService = transferService;
 
         [HttpGet]
-        public IEnumerable<string> Get()
+        public IEnumerable<TransferLog> Get()
         {
-            return Summaries;
+            return _transferService.GetTransferLogs();
         }
     }
 }
