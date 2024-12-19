@@ -6,7 +6,7 @@ namespace MicroRabbit.Transfer.Data.Repository
 {
     public class TransferLogRepository(TransferDbContext context) : ITransferLogRepository
     {
-        private TransferDbContext _context = context;
+        private readonly TransferDbContext _context = context;
 
         public IEnumerable<TransferLog> GetTransferLogs()
         {

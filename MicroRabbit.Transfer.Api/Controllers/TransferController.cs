@@ -6,14 +6,14 @@ namespace MicroRabbit.Transfer.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class WeatherForecastController(ITransferService transferService) : ControllerBase
+    public class TransferController(ITransferService transferService) : ControllerBase
     {
         private readonly ITransferService _transferService = transferService;
 
         [HttpGet]
-        public IEnumerable<TransferLog> Get()
+        public ActionResult<IEnumerable<TransferLog>> Get()
         {
-            return _transferService.GetTransferLogs();
+            return Ok(_transferService.GetTransferLogs());
         }
     }
 }
