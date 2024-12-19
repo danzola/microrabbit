@@ -14,6 +14,9 @@ namespace MicroRabbit.Transfer.Api
     {
         public static void AddTransferServices(this IServiceCollection services, IConfiguration configuration)
         {
+            //Subscriptions
+            services.AddTransient<TransferEventHandler>();            
+
             //Domain Events
             services.AddTransient<IEventHandler<TransferCreatedEvent>, TransferEventHandler>();
 

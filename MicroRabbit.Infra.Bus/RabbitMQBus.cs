@@ -3,15 +3,17 @@ using MediatR;
 using MicroRabbit.Domain.Core.Bus;
 using MicroRabbit.Domain.Core.Commands;
 using MicroRabbit.Domain.Core.Events;
+using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 
 namespace MicroRabbit.Infra.Bus
 {
-    public sealed class RabbitMQBus(IMediator mediator) : IEventBus
+    public sealed class RabbitMQBus(IMediator mediator, IServiceScopeFactory serviceScopeFactory) : IEventBus
     {
         private readonly IMediator _mediator = mediator;
+        private readonly IServiceScopeFactory _serviceScopeFactory = serviceScopeFactory;
         private readonly Dictionary<string, List<Type>> _handlers = [];
         private readonly List<Type> _eventTypes = [];
 
@@ -133,10 +135,11 @@ namespace MicroRabbit.Infra.Bus
         {
             if(_handlers.TryGetValue(eventName, out List<Type>? subscriptions))
             {
+                using var scope = _serviceScopeFactory.CreateScope();
                 foreach (var subscription in subscriptions)
                 {
-                    var handler = Activator.CreateInstance(subscription);
-                    if(handler == null) continue;
+                    var handler = scope.ServiceProvider.GetService(subscription);
+                    if (handler == null) continue;
                     var eventType = _eventTypes.SingleOrDefault(t => t.Name == eventName);
                     var @event = JsonConvert.DeserializeObject(message, eventType);
                     var concreteType = typeof(IEventHandler<>).MakeGenericType(eventType);
