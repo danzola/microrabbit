@@ -21,7 +21,7 @@ namespace MicroRabbit.Banking.Api.Controllers
         public async Task<IActionResult> Post([FromBody] AccountTransfer accountTransfer)
         {
             await _accountService.Transfer(accountTransfer);
-            return Ok();
+            return Ok(accountTransfer);
         }
     }
 }
