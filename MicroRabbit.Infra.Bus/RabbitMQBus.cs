@@ -10,12 +10,31 @@ using RabbitMQ.Client.Events;
 
 namespace MicroRabbit.Infra.Bus
 {
-    public sealed class RabbitMQBus(IMediator mediator, IServiceScopeFactory serviceScopeFactory) : IEventBus
+    public sealed class RabbitMQBus : IEventBus, IAsyncDisposable
     {
-        private readonly IMediator _mediator = mediator;
-        private readonly IServiceScopeFactory _serviceScopeFactory = serviceScopeFactory;
+        private readonly IMediator _mediator;
+        private readonly IServiceScopeFactory _serviceScopeFactory;
         private readonly Dictionary<string, List<Type>> _handlers = [];
         private readonly List<Type> _eventTypes = [];
+        private IConnection? _connection;
+        private IChannel? _channel;
+
+        public RabbitMQBus(IMediator mediator, IServiceScopeFactory serviceScopeFactory)
+        {
+            _mediator = mediator;
+            _serviceScopeFactory = serviceScopeFactory;
+        }
+
+        private async Task InitializeConnectionAsync()
+        {
+            var factory = new ConnectionFactory
+            {
+                HostName = "localhost"
+            };
+
+            _connection = await factory.CreateConnectionAsync();
+            _channel = await _connection.CreateChannelAsync();
+        }
 
         public Task SendCommand<T>(T command) where T : Command
         {
@@ -24,23 +43,30 @@ namespace MicroRabbit.Infra.Bus
 
         public async Task Publish<T>(T @event) where T : Event
         {
-            var factory = new ConnectionFactory() { HostName = "localhost" };
-            using var connection = factory.CreateConnection();
-            using var channel = connection.CreateModel();
+            if (_connection is null || _channel is null)
+            {
+                await InitializeConnectionAsync();
+            }
+            
             var eventName = @event.GetType().Name;
 
-            channel.QueueDeclare(eventName, false, false, false, null);
+            await _channel!.QueueDeclareAsync(eventName, false, false, false, null);
 
             var message = JsonConvert.SerializeObject(@event);
             var body = Encoding.UTF8.GetBytes(message);
 
-            channel.BasicPublish("", eventName, null, body);
+            await _channel.BasicPublishAsync(exchange: "", routingKey: eventName, body: body);            
         }
 
         public async Task Subscribe<T, TH>()
             where T : Event
             where TH : IEventHandler<T>
         {
+            if (_connection is null || _channel is null)
+            {
+                await InitializeConnectionAsync();
+            }
+
             var eventName = typeof(T).Name;
             var handlerType = typeof(TH);
 
@@ -62,28 +88,27 @@ namespace MicroRabbit.Infra.Bus
 
             _handlers[eventName].Add(handlerType);
 
-            StartBasicConsume<T>();
+            await StartBasicConsumeAsync<T>();
         }
 
-        private void StartBasicConsume<T>() where T : Event
+        private async Task StartBasicConsumeAsync<T>() where T : Event
         {
-            var factory = new ConnectionFactory()
-            {
-                HostName = "localhost",
-                DispatchConsumersAsync = true
-            };
-
-            var connection = factory.CreateConnection();
-            var channel = connection.CreateModel();
-
             var eventName = typeof(T).Name;
 
-            channel.QueueDeclare(eventName, false, false, false, null);
+            await _channel!.QueueDeclareAsync(
+                queue: eventName,
+                durable: false,
+                exclusive: false,
+                autoDelete: false,
+                arguments: null);
 
-            var consumer = new AsyncEventingBasicConsumer(channel);
-            consumer.Received += Consumer_ReceivedAsync;
+            var consumer = new AsyncEventingBasicConsumer(_channel);
+            consumer.ReceivedAsync += Consumer_ReceivedAsync;
 
-            channel.BasicConsume(eventName, true, consumer);
+            await _channel.BasicConsumeAsync(
+                queue: eventName,
+                autoAck: true,
+                consumer: consumer);
         }
 
         private async Task Consumer_ReceivedAsync(object sender, BasicDeliverEventArgs e)
@@ -111,12 +136,26 @@ namespace MicroRabbit.Infra.Bus
                 {
                     var handler = scope.ServiceProvider.GetService(subscription);
                     if (handler == null) continue;
+
                     var eventType = _eventTypes.SingleOrDefault(t => t.Name == eventName);
+                    if (eventType == null) continue;
+
                     var @event = JsonConvert.DeserializeObject(message, eventType);
                     var concreteType = typeof(IEventHandler<>).MakeGenericType(eventType);
                     await (Task)concreteType.GetMethod("Handle")?.Invoke(handler, [@event]);
                 }
             }
         }
+        public async ValueTask DisposeAsync()
+        {
+            if (_channel?.IsOpen == true)
+                await _channel.CloseAsync();
+
+            if (_connection?.IsOpen == true)
+                await _connection.CloseAsync();
+
+            GC.SuppressFinalize(this);
+        }
+
     }
 }
