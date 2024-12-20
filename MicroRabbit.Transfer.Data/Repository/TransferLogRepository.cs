@@ -12,5 +12,11 @@ namespace MicroRabbit.Transfer.Data.Repository
         {
             return _context.TransferLogs;
         }
+
+        public Task Add(TransferLog transferLog)
+        {
+            _context.TransferLogs.Add(transferLog);
+            return _context.SaveChangesAsync();
+        }
     }
 }
