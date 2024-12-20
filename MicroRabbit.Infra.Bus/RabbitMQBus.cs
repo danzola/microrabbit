@@ -24,36 +24,17 @@ namespace MicroRabbit.Infra.Bus
 
         public async Task Publish<T>(T @event) where T : Event
         {
-            var factory = new ConnectionFactory()
-            {
-                HostName = "localhost"
-            };
+            var factory = new ConnectionFactory() { HostName = "localhost" };
+            using var connection = factory.CreateConnection();
+            using var channel = connection.CreateModel();
+            var eventName = @event.GetType().Name;
 
-            await using var connection = await factory.CreateConnectionAsync();
-            await using var channel = await connection.CreateChannelAsync();
+            channel.QueueDeclare(eventName, false, false, false, null);
 
-            try
-            {
-                var eventName = @event.GetType().Name;
-                await channel.QueueDeclareAsync(queue: eventName,
-                                                durable: false,     // Queue won't survive broker restart
-                                                exclusive: false,  // Queue can be accessed by other connections
-                                                autoDelete: false, // Queue won't be deleted when connection closes
-                                                arguments: null);
+            var message = JsonConvert.SerializeObject(@event);
+            var body = Encoding.UTF8.GetBytes(message);
 
-                var message = JsonConvert.SerializeObject(@event);
-                var body = Encoding.UTF8.GetBytes(message);
-
-
-                await channel.BasicPublishAsync(exchange: "",
-                                                routingKey: eventName,
-                                                body: body);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error publishing message: {ex.Message}");
-                throw;
-            }
+            channel.BasicPublish("", eventName, null, body);
         }
 
         public async Task Subscribe<T, TH>()
@@ -63,57 +44,46 @@ namespace MicroRabbit.Infra.Bus
             var eventName = typeof(T).Name;
             var handlerType = typeof(TH);
 
-            if(!_eventTypes.Contains(typeof(T)))
+            if (!_eventTypes.Contains(typeof(T)))
             {
                 _eventTypes.Add(typeof(T));
             }
 
-            if(!_handlers.ContainsKey(eventName))
+            if (!_handlers.ContainsKey(eventName))
             {
-                _handlers.Add(eventName, []);
+                _handlers.Add(eventName, new List<Type>());
             }
 
             if (_handlers[eventName].Any(s => s.GetType() == handlerType))
             {
-                throw new ArgumentException($"Handler Type {handlerType.Name} already is registered for {eventName}", nameof(handlerType));
+                throw new ArgumentException(
+                    $"Handler Type {handlerType.Name} already is registered for '{eventName}'", nameof(handlerType));
             }
 
             _handlers[eventName].Add(handlerType);
 
-            await StartBasicConsume<T>();
+            StartBasicConsume<T>();
         }
 
-        private async Task StartBasicConsume<T>() where T : Event
+        private void StartBasicConsume<T>() where T : Event
         {
             var factory = new ConnectionFactory()
             {
-                HostName = "localhost"
+                HostName = "localhost",
+                DispatchConsumersAsync = true
             };
 
-            await using var connection = await factory.CreateConnectionAsync();
-            await using var channel = await connection.CreateChannelAsync();
+            var connection = factory.CreateConnection();
+            var channel = connection.CreateModel();
 
-            try
-            {
-                var eventName = typeof (T).Name;
-                await channel.QueueDeclareAsync(queue: eventName,
-                                                durable: false,
-                                                exclusive: false,
-                                                autoDelete: false,
-                                                arguments: null);
+            var eventName = typeof(T).Name;
 
-                var consumer = new AsyncEventingBasicConsumer(channel);
-                consumer.ReceivedAsync += Consumer_ReceivedAsync;
+            channel.QueueDeclare(eventName, false, false, false, null);
 
-                await channel.BasicConsumeAsync(queue: eventName, autoAck: true, consumer);
+            var consumer = new AsyncEventingBasicConsumer(channel);
+            consumer.Received += Consumer_ReceivedAsync;
 
-                Console.ReadLine();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error publishing message: {ex.Message}");
-                throw;
-            }
+            channel.BasicConsume(eventName, true, consumer);
         }
 
         private async Task Consumer_ReceivedAsync(object sender, BasicDeliverEventArgs e)
@@ -147,6 +117,6 @@ namespace MicroRabbit.Infra.Bus
                     await (Task)concreteType.GetMethod("Handle")?.Invoke(handler, [@event]);
                 }
             }
-        }        
+        }
     }
 }

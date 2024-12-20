@@ -7,8 +7,6 @@ using MicroRabbit.Transfer.Domain.Events;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
-Console.WriteLine("Press any key to exit...");
-
 var builder = Host.CreateDefaultBuilder(args)            
             .ConfigureServices((context, services) =>
             {
@@ -22,4 +20,4 @@ using var host = builder.Build();
 var eventBus = host.Services.GetRequiredService<IEventBus>();
 await eventBus.Subscribe<TransferCreatedEvent, TransferEventHandler>();
 
-//await host.RunAsync();
+await host.RunAsync();
