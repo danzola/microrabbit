@@ -34,12 +34,4 @@ app.MapControllers();
 var eventBus = app.Services.GetRequiredService<IEventBus>();
 await eventBus.Subscribe<TransferCreatedEvent, TransferEventHandler>();
 
-//ConfigureEventBus(app);
-
 app.Run();
-
-void ConfigureEventBus(IApplicationBuilder app)
-{
-    var eventBus = app.ApplicationServices.GetRequiredService<IEventBus>();
-    eventBus.Subscribe<TransferCreatedEvent, TransferEventHandler>();
-}
