@@ -105,6 +105,7 @@ namespace MicroRabbit.Infra.Bus
 
                 await channel.BasicConsumeAsync(queue: eventName, autoAck: true, consumer);
 
+                Console.ReadLine();
             }
             catch (Exception ex)
             {
@@ -143,6 +144,6 @@ namespace MicroRabbit.Infra.Bus
                     await (Task)concreteType.GetMethod("Handle")?.Invoke(handler, [@event]);
                 }
             }
-        }
+        }        
     }
 }

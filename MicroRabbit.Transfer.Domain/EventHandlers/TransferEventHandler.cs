@@ -8,7 +8,8 @@ namespace MicroRabbit.Transfer.Domain.EventHandlers
 
         public Task Handle(TransferCreatedEvent @event)
         {
-            throw new NotImplementedException();
+            Console.WriteLine($"Transfer Event Handled: From: {@event.From} To: {@event.To} Amount: {@event.Amount}");
+            return Task.CompletedTask;
         }
     }
 }
