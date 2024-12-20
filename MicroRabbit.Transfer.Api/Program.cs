@@ -33,5 +33,6 @@ app.MapControllers();
 
 var eventBus = app.Services.GetRequiredService<IEventBus>();
 await eventBus.Subscribe<TransferCreatedEvent, TransferEventHandler>();
+await eventBus.Subscribe<CanceledAccountEvent, CancelAccountEventHandler>();
 
 app.Run();

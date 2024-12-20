@@ -7,5 +7,6 @@ namespace MicroRabbit.Banking.Application.Interfaces
     {
         IEnumerable<Account> GetAccounts();
         Task Transfer(AccountTransfer accountTransfer);
+        Task CancelAccount(string reason);
     }
 }

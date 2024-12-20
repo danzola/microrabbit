@@ -19,5 +19,6 @@ using var host = builder.Build();
 
 var eventBus = host.Services.GetRequiredService<IEventBus>();
 await eventBus.Subscribe<TransferCreatedEvent, TransferEventHandler>();
+await eventBus.Subscribe<CanceledAccountEvent, CancelAccountEventHandler>();
 
 await host.RunAsync();

@@ -18,9 +18,11 @@ namespace MicroRabbit.Transfer.Console
         {
             //Subscriptions
             services.AddTransient<TransferEventHandler>();
+            services.AddTransient<CancelAccountEventHandler>();
 
             //Domain Events
             services.AddTransient<IEventHandler<TransferCreatedEvent>, TransferEventHandler>();
+            services.AddTransient<IEventHandler<CanceledAccountEvent>, CancelAccountEventHandler>();
 
             //Application Services
             services.AddTransient<ITransferService, TransferService>();

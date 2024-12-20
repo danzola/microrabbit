@@ -23,5 +23,12 @@ namespace MicroRabbit.Banking.Api.Controllers
             await _accountService.Transfer(accountTransfer);
             return Ok(accountTransfer);
         }
+
+        [HttpPost("Cancel")]
+        public async Task<IActionResult> CancelAccount([FromBody] string reason)
+        {
+            await _accountService.CancelAccount(reason);
+            return Ok();
+        }
     }
 }

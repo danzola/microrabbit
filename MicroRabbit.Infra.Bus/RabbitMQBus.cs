@@ -10,20 +10,14 @@ using RabbitMQ.Client.Events;
 
 namespace MicroRabbit.Infra.Bus
 {
-    public sealed class RabbitMQBus : IEventBus, IAsyncDisposable
+    public sealed class RabbitMQBus(IMediator mediator, IServiceScopeFactory serviceScopeFactory) : IEventBus, IAsyncDisposable
     {
-        private readonly IMediator _mediator;
-        private readonly IServiceScopeFactory _serviceScopeFactory;
+        private readonly IMediator _mediator = mediator;
+        private readonly IServiceScopeFactory _serviceScopeFactory = serviceScopeFactory;
         private readonly Dictionary<string, List<Type>> _handlers = [];
         private readonly List<Type> _eventTypes = [];
         private IConnection? _connection;
         private IChannel? _channel;
-
-        public RabbitMQBus(IMediator mediator, IServiceScopeFactory serviceScopeFactory)
-        {
-            _mediator = mediator;
-            _serviceScopeFactory = serviceScopeFactory;
-        }
 
         private async Task InitializeConnectionAsync()
         {
@@ -88,10 +82,12 @@ namespace MicroRabbit.Infra.Bus
 
             _handlers[eventName].Add(handlerType);
 
-            await StartBasicConsumeAsync<T>();
+            await StartBasicConsumeAsync<T,TH>();
         }
 
-        private async Task StartBasicConsumeAsync<T>() where T : Event
+        private async Task StartBasicConsumeAsync<T,TH>()
+            where T : Event
+            where TH : IEventHandler<T>
         {
             var eventName = typeof(T).Name;
 
@@ -103,7 +99,7 @@ namespace MicroRabbit.Infra.Bus
                 arguments: null);
 
             var consumer = new AsyncEventingBasicConsumer(_channel);
-            consumer.ReceivedAsync += Consumer_ReceivedAsync;
+            consumer.ReceivedAsync += Consumer_ReceivedAsync<T, TH>;
 
             await _channel.BasicConsumeAsync(
                 queue: eventName,
@@ -111,14 +107,16 @@ namespace MicroRabbit.Infra.Bus
                 consumer: consumer);
         }
 
-        private async Task Consumer_ReceivedAsync(object sender, BasicDeliverEventArgs e)
+        private async Task Consumer_ReceivedAsync<T, TH>(object sender, BasicDeliverEventArgs e)
+            where T : Event
+            where TH : IEventHandler<T>
         {
             var eventName = e.RoutingKey;
             var body = @e.Body.ToArray();
             var message = Encoding.UTF8.GetString(body);
             try
             {
-                await ProcessEvent(eventName,message).ConfigureAwait(false);
+                await ProcessEvent<T, TH>(eventName,message).ConfigureAwait(false);
             }
             catch(Exception ex)
             {
@@ -127,22 +125,25 @@ namespace MicroRabbit.Infra.Bus
             }
         }
 
-        private async Task ProcessEvent(string eventName, string message)
+        private async Task ProcessEvent<T, TH>(string eventName, string message)
+            where T : Event
+            where TH : IEventHandler<T>
         {
             if(_handlers.TryGetValue(eventName, out List<Type>? subscriptions))
             {
                 using var scope = _serviceScopeFactory.CreateScope();
                 foreach (var subscription in subscriptions)
                 {
-                    var handler = scope.ServiceProvider.GetService(subscription);
+                    var handler = scope.ServiceProvider.GetRequiredService<TH>();
                     if (handler == null) continue;
 
                     var eventType = _eventTypes.SingleOrDefault(t => t.Name == eventName);
                     if (eventType == null) continue;
 
                     var @event = JsonConvert.DeserializeObject(message, eventType);
-                    var concreteType = typeof(IEventHandler<>).MakeGenericType(eventType);
-                    await (Task)concreteType.GetMethod("Handle")?.Invoke(handler, [@event]);
+                    if (@event == null) continue;
+
+                    await handler.Handle((T)@event);
                 }
             }
         }

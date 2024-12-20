@@ -9,7 +9,6 @@ namespace MicroRabbit.Infra.IoC
     {
         public static void AddMicroRabbitServices(this IServiceCollection services)
         {
-            //Domain Bus
             services.AddSingleton<IEventBus, RabbitMQBus>(sp =>
             {
                 var serviceScopeFactory = sp.GetRequiredService<IServiceScopeFactory>();

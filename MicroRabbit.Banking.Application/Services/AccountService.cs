@@ -12,6 +12,12 @@ namespace MicroRabbit.Banking.Application.Services
         private readonly IAccountRepository _accountRepository = accountRepository;
         private readonly IEventBus _eventBus = eventBus;
 
+        public async Task CancelAccount(string reason)
+        {
+            CancelAccountCommand cancelAccountCommand = new(reason);
+            await _eventBus.SendCommand(cancelAccountCommand);
+        }
+
         public IEnumerable<Account> GetAccounts()
         {
             return _accountRepository.GetAccounts();

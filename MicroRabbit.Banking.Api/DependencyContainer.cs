@@ -16,6 +16,7 @@ namespace MicroRabbit.Banking.Api
         {
             //Domain Commands
             services.AddTransient<IRequestHandler<CreateTransferCommand, bool>, TransferCommandHandler>();
+            services.AddTransient<IRequestHandler<CancelAccountCommand, bool>, CancelAccountCommandHandler>();
 
             //Application Services
             services.AddTransient<IAccountService, AccountService>();            
